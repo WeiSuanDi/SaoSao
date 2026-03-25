@@ -142,10 +142,16 @@ async def lifespan(app: FastAPI):
                     id SERIAL PRIMARY KEY,
                     location_id VARCHAR(50) NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
                     session_id VARCHAR(64) NOT NULL,
-                    image_url VARCHAR(500) NOT NULL,
+                    image_data TEXT,
+                    image_url VARCHAR(500),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """))
+            # 添加 image_data 列（如果不存在）
+            try:
+                await conn.execute(text("ALTER TABLE photos ADD COLUMN IF NOT EXISTS image_data TEXT"))
+            except Exception:
+                pass  # 列可能已存在
             print("✅ Database migration completed")
         except Exception as e:
             print(f"Migration info: {e}")
