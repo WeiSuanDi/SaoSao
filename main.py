@@ -323,7 +323,7 @@ async def post_message(
         await db.commit()
         await db.refresh(message)
 
-        return message.to_dict(sid)
+        return message.to_dict(sid, check_likes=False)
 
 
 @app.post("/api/loc/{location_id}/heartbeat")
