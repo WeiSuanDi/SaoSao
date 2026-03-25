@@ -553,21 +553,16 @@ async def upload_photo(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"图片处理失败: {str(e)}")
 
-    # 生成文件名
-    timestamp = int(datetime.utcnow().timestamp())
-    random_str = ''.join(random.choices(string.ascii_lowercase + string.digits) for _ in range(6))
-    filename = f"{location_id}_{timestamp}_{random_str}.jpg"
+    # 将图片转换为 base64 编码
+    import base64
+    image_base64 = base64.b64encode(compressed_contents).decode('utf-8')
 
-    filepath = os.path.join(os.path.dirname(__file__), "uploads", filename)
-
-    # 保存文件到数据库
-    image_url = f"/uploads/{filename}"
-
+    # 保存到数据库
     async with AsyncSessionLocal() as db:
         new_photo = Photo(
             location_id=location_id,
             session_id=sid,
-            image_url=image_url,
+            image_data=image_base64,
             created_at=datetime.utcnow()
         )
         db.add(new_photo)
