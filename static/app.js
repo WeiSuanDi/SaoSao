@@ -291,8 +291,18 @@ async function loadLocation() {
         // 保存我的昵称
         myNickname = data.my_nickname;
 
-        // 渲染留言
-        renderMessages(data.messages);
+        // 渲染照片时间线
+        renderPhotos(data.photos || []);
+
+        // 检查是否需要拍照门禁
+        if (!data.has_photo) {
+            // 首次访问，显示拍照门禁
+            showPhotoGate(data.location);
+        } else {
+            // 已拍过照，显示留言页面
+            showMainContent();
+            renderMessages(data.messages);
+        }
 
         // 启动心跳
         startHeartbeat();
@@ -403,6 +413,177 @@ async function sendMessage() {
     }
 }
 
+
+// ==================== 拍照门禁功能 ====================
+
+/**
+ * 显示拍照门禁页面
+ */
+function showPhotoGate(location) {
+    document.getElementById('photoGate').style.display = 'flex';
+    document.getElementById('gateEmoji').textContent = location.emoji || '📍';
+    document.getElementById('gateLocationName').textContent = location.name;
+    document.getElementById('mainContent').style.display = 'none';
+    document.getElementById('inputBar').style.display = 'none';
+}
+
+/**
+ * 显示主内容（已拍照后）
+ */
+function showMainContent() {
+    document.getElementById('photoGate').style.display = 'none';
+    document.getElementById('mainContent').style.display = 'block';
+    document.getElementById('inputBar').style.display = 'flex';
+}
+
+/**
+ * 打开相机
+ */
+function openCamera() {
+    document.getElementById('camera-input').click();
+}
+
+/**
+ * 处理照片选择
+ */
+async function handlePhotoSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // 验证文件类型
+    if (!file.type.startsWith('image/')) {
+        showToast('请选择图片文件');
+        return;
+    }
+
+    // 验证文件大小 (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('图片大小不能超过 5MB');
+        return;
+    }
+
+    // 显示上传状态
+    showUploadProgress();
+
+    try {
+        const formData = new FormData();
+        formData.append('photo', file);
+
+        const response = await fetch(`/api/loc/${locationId}/photo`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || '上传失败');
+        }
+
+        const data = await response.json();
+
+        // 隐藏上传进度
+        hideUploadProgress();
+
+        // 显示成功动画
+        showToast('照片上传成功！');
+
+        // 切换到主内容
+        setTimeout(() => {
+            showMainContent();
+            // 刷新数据
+            refreshMessages();
+        }, 500);
+
+    } catch (error) {
+        console.error('上传照片失败:', error);
+        hideUploadProgress();
+        showToast(error.message || '上传失败，请重试');
+    }
+
+    // 清空input，允许再次选择同一文件
+    event.target.value = '';
+}
+
+/**
+ * 显示上传进度
+ */
+function showUploadProgress() {
+    const gateContent = document.querySelector('.gate-content');
+    gateContent.innerHTML = `
+        <div class="upload-progress">
+            <div class="upload-spinner"></div>
+            <p>正在上传照片...</p>
+        </div>
+    `;
+}
+
+/**
+ * 隐藏上传进度
+ */
+function hideUploadProgress() {
+    // upload progress 会在 showMainContent 时被移除
+}
+
+/**
+ * 渲染照片时间线
+ */
+function renderPhotos(photos) {
+    const container = document.getElementById('timelinePhotos');
+    const hint = document.getElementById('timelineHint');
+
+    if (!photos || photos.length === 0) {
+        hint.style.display = 'block';
+        container.innerHTML = '';
+        return;
+    }
+
+    hint.style.display = 'none';
+    container.innerHTML = '';
+
+    photos.forEach(photo => {
+        const div = document.createElement('div');
+        div.className = 'timeline-photo';
+        div.innerHTML = `
+            <img src="${photo.image_url}" alt="地点照片" loading="lazy">
+            <div class="timeline-photo-time">${formatRelativeTime(photo.created_at)}</div>
+        `;
+        div.onclick = () => openLightbox(photo.image_url);
+        container.appendChild(div);
+    });
+}
+
+/**
+ * 打开灯箱查看大图
+ */
+function openLightbox(imageUrl) {
+    // 创建灯箱
+    const lightbox = document.createElement('div');
+    lightbox.className = 'lightbox';
+    lightbox.id = 'lightbox';
+    lightbox.innerHTML = `
+        <img src="${imageUrl}" alt="大图">
+        <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+    `;
+    lightbox.onclick = (e) => {
+        if (e.target === lightbox) {
+            closeLightbox();
+        }
+    };
+    document.body.appendChild(lightbox);
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * 关闭灯箱
+ */
+function closeLightbox() {
+    const lightbox = document.getElementById('lightbox');
+    if (lightbox) {
+        lightbox.remove();
+        document.body.style.overflow = '';
+    }
+}
+
 /**
  * 心跳：保持在线状态
  */
@@ -500,6 +681,9 @@ function init() {
     // 创建背景粒子
     createParticles();
 
+    // 初始化拍照功能
+    initPhotoGate();
+
     // 加载数据
     loadLocation();
 
@@ -520,6 +704,17 @@ function init() {
 
     // 初始字符计数
     updateCharCount();
+}
+
+/**
+ * 初始化拍照门禁功能
+ */
+function initPhotoGate() {
+    // 绑定相机 input 事件
+    const cameraInput = document.getElementById('camera-input');
+    if (cameraInput) {
+        cameraInput.addEventListener('change', handlePhotoSelect);
+    }
 }
 
 // 页面加载完成后初始化

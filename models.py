@@ -1,6 +1,6 @@
 """
 SQLAlchemy 数据模型
-包含四张表：locations, messages, presence, likes
+包含五张表：locations, messages, presence, likes, photos
 """
 from datetime import datetime
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, UniqueConstraint, Text
@@ -22,6 +22,7 @@ class Location(Base):
     # 关联关系
     messages = relationship("Message", back_populates="location", cascade="all, delete-orphan")
     presences = relationship("Presence", back_populates="location", cascade="all, delete-orphan")
+    photos = relationship("Photo", back_populates="location", cascade="all, delete-orphan")
 
     def to_dict(self):
         """转换为字典"""
@@ -93,6 +94,28 @@ class Presence(Base):
 
     # 关联关系
     location = relationship("Location", back_populates="presences")
+
+
+class Photo(Base):
+    """照片表 - 拍照入场功能"""
+    __tablename__ = "photos"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)  # 自增主键
+    location_id = Column(String(50), ForeignKey("locations.id"), nullable=False)  # 关联地点
+    session_id = Column(String(64), nullable=False)  # 上传者 session 标识
+    image_url = Column(String(500), nullable=False)  # 图片访问URL
+    created_at = Column(DateTime, default=datetime.utcnow)  # 上传时间
+
+    # 关联关系
+    location = relationship("Location", back_populates="photos")
+
+    def to_dict(self):
+        """转换为字典"""
+        return {
+            "id": self.id,
+            "image_url": self.image_url,
+            "created_at": self.created_at.isoformat() + 'Z' if self.created_at else None
+        }
 
 
 def init_models(engine):

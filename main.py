@@ -7,16 +7,19 @@ from datetime import datetime, timedelta
 from typing import Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Cookie, Response, Request
+from fastapi import FastAPI, HTTPException, Cookie, Response, Request, UploadFile, File
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, func, update, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from PIL import Image
+import io
+import os
 
 from database import async_engine, get_async_session, AsyncSessionLocal
-from models import Base, Location, Message, Presence, Like, init_models
+from models import Base, Location, Message, Presence, Like, Photo, init_models
 
 
 # 昵称生成词库
@@ -107,6 +110,12 @@ async def init_seed_data():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理：启动时初始化数据库和种子数据"""
+    # 创建 uploads 目录
+    uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+    if not os.path.exists(uploads_dir):
+        os.makedirs(uploads_dir)
+        print(f"✅ Created uploads directory: {uploads_dir}")
+
     async with async_engine.begin() as conn:
         # 创建所有表
         await conn.run_sync(Base.metadata.create_all)
@@ -125,6 +134,16 @@ async def lifespan(app: FastAPI):
                     session_id VARCHAR(64) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(message_id, session_id)
+                )
+            """))
+            # 创建 photos 表（如果不存在）
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS photos (
+                    id SERIAL PRIMARY KEY,
+                    location_id VARCHAR(50) NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+                    session_id VARCHAR(64) NOT NULL,
+                    image_url VARCHAR(500) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """))
             print("✅ Database migration completed")
@@ -244,13 +263,33 @@ async def get_location(
         # 获取地点emoji
         location_emoji = next((loc["emoji"] for loc in LOCATIONS if loc["id"] == location_id), "📍")
 
+        # 查询照片相关数据
+        # 检查当前用户是否已上传照片
+        photo_check = await db.execute(
+            select(func.count(Photo.id))
+            .where(Photo.location_id == location_id)
+            .where(Photo.session_id == sid)
+        )
+        has_photo = (photo_check.scalar() or 0) > 0
+
+        # 查询最近20张照片
+        photos_result = await db.execute(
+            select(Photo)
+            .where(Photo.location_id == location_id)
+            .order_by(Photo.created_at.desc())
+            .limit(20)
+        )
+        photos = photos_result.scalars().all()
+
         await db.commit()
 
         return {
             "location": {**location.to_dict(), "emoji": location_emoji},
             "messages": [msg.to_dict(sid) for msg in messages],
             "presence_count": presence_count,
-            "my_nickname": my_nickname
+            "my_nickname": my_nickname,
+            "has_photo": has_photo,
+            "photos": [p.to_dict() for p in photos]
         }
 
 
@@ -444,6 +483,108 @@ async def toggle_like(
         }
 
 
+@app.post("/api/loc/{location_id}/photo")
+async def upload_photo(
+    location_id: str,
+    request: Request,
+    response: Response,
+    photo: UploadFile = File(...),
+    session_id: Optional[str] = Cookie(None)
+):
+    """
+    上传照片
+    用于拍照入场功能
+    """
+    from fastapi import UploadFile, File
+    import string
+    import io
+
+    # 生成或复用 session_id
+    sid = await get_or_create_session_id(session_id)
+    if not session_id:
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            max_age=30 * 24 * 60 * 60,
+            httponly=False,
+            samesite="lax"
+        )
+
+    # 验证文件
+    if not photo:
+        raise HTTPException(status_code=400, detail="请选择照片")
+
+    # 检查文件类型
+    allowed_types = ["image/jpeg", "image/png", "image/webp"]
+    if photo.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="只支持 JPEG、 PNG 和 WebP 格式")
+
+    # 检查文件大小 (5MB)
+    contents = await photo.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="图片大小不能超过 5MB")
+
+    # 检查地点是否存在
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Location).where(Location.id == location_id)
+        )
+        location = result.scalar_one_or_none()
+
+        if not location:
+            raise HTTPException(status_code=404, detail="地点不存在")
+
+        # 压缩图片
+        try:
+                img = Image.open(io.BytesIO(contents))
+
+                # 转换为 RGB 模式（如果需要）
+                if img.mode in ("P", "RGBA"):
+                    img = img.convert("RGB")
+
+                # 缩放图片（最大宽度 1200px）
+                max_width = 1200
+                if img.width > max_width:
+                    ratio = max_width / img.width
+                    new_height = int(img.height * ratio)
+                    img = img.resize((max_width, new_height), Image.LANCZOS)
+
+                # 转换为 JPEG 并压缩
+                output = io.BytesIO()
+                img.save(output, format="JPEG", quality=80, optimize=True)
+                compressed_contents = output.getvalue()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"图片处理失败: {str(e)}")
+
+        # 生成文件名
+        timestamp = int(datetime.utcnow().timestamp())
+        random_str = ''.join(random.choices(string.ascii_lowercase + string.digits) for _ in range(6))
+        filename = f"{location_id}_{timestamp}_{random_str}.jpg"
+
+        filepath = os.path.join(os.path.dirname(__file__), "uploads", filename)
+
+        # 保存文件
+        with open(filepath, "wb") as f:
+            f.write(compressed_contents)
+
+        # 保存到数据库
+        image_url = f"/uploads/{filename}"
+        new_photo = Photo(
+            location_id=location_id,
+            session_id=sid,
+            image_url=image_url,
+            created_at=datetime.utcnow()
+        )
+        db.add(new_photo)
+        await db.commit()
+        await db.refresh(new_photo)
+
+        return {
+            "ok": True,
+            "photo": new_photo.to_dict()
+        }
+
+
 @app.get("/api/stats")
 async def get_stats():
     """
@@ -504,8 +645,15 @@ async def get_stats():
 # 挂载静态文件目录
 import os
 static_dir = os.path.join(os.path.dirname(__file__), "static")
+uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+# 挂载 uploads 目录为静态文件服务
+uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+if not os.path.exists(uploads_dir):
+    os.makedirs(uploads_dir)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 
 @app.get("/")
