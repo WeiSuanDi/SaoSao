@@ -37,3 +37,7 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# Screenshots
+*.png
+!qrcodes/*.png

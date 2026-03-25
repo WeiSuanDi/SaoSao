@@ -1,16 +1,52 @@
 /**
- * weisuandi.com 前端逻辑
+ * weisuandi.com v2.0 前端逻辑
  */
 
 // 配置
 const HEARTBEAT_INTERVAL = 5 * 60 * 1000; // 5分钟
 const REFRESH_INTERVAL = 30 * 1000; // 30秒
+const TOAST_DURATION = 2500;
 
 // 状态
 let locationId = null;
 let myNickname = null;
 let heartbeatTimer = null;
 let refreshTimer = null;
+let isLoading = false;
+let theme = localStorage.getItem('theme') || 'dark';
+
+// 初始化主题
+document.documentElement.setAttribute('data-theme', theme);
+
+/**
+ * 显示 Toast 提示
+ */
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.classList.add('show');
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, TOAST_DURATION);
+}
+
+/**
+ * 切换主题
+ */
+function toggleTheme() {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    showToast(theme === 'dark' ? '已切换到暗色模式' : '已切换到亮色模式');
+}
+
+/**
+ * 滚动到输入框
+ */
+function scrollToInput() {
+    document.getElementById('messageInput').focus();
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+}
 
 /**
  * 从 URL 解析 location_id
@@ -43,7 +79,6 @@ function getOrCreateSessionId() {
             return value;
         }
     }
-    // 没有则创建一个新的
     const sessionId = generateUUID();
     document.cookie = `session_id=${sessionId}; max-age=${30 * 24 * 60 * 60}; path=/`;
     return sessionId;
@@ -80,10 +115,10 @@ function formatRelativeTime(dateStr) {
         return `${minutes}分钟前`;
     } else if (hours < 24) {
         return `${hours}小时前`;
-    } else if (days < 30) {
+    } else if (days < 7) {
         return `${days}天前`;
     } else {
-        return date.toLocaleDateString('zh-CN');
+        return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
     }
 }
 
@@ -101,17 +136,41 @@ function escapeHtml(text) {
  */
 function renderMessages(messages) {
     const container = document.getElementById('messages');
+    const emptyState = document.getElementById('emptyState');
+
     container.innerHTML = '';
+
+    if (messages.length === 0) {
+        emptyState.style.display = 'block';
+        return;
+    }
+
+    emptyState.style.display = 'none';
 
     messages.forEach(msg => {
         const card = document.createElement('div');
         card.className = 'message-card';
+        card.dataset.id = msg.id;
+
+        const liked = msg.liked ? 'liked' : '';
+        const heartFill = msg.liked ? 'fill="currentColor"' : '';
+
         card.innerHTML = `
             <div class="message-header">
-                <span class="message-nickname ${getNicknameColorClass(msg.nickname)}">${escapeHtml(msg.nickname)}</span>
+                <span class="message-nickname">
+                    <span class="nickname-badge ${getNicknameColorClass(msg.nickname)}">${escapeHtml(msg.nickname)}</span>
+                </span>
                 <span class="message-time">${formatRelativeTime(msg.created_at)}</span>
             </div>
             <div class="message-content">${escapeHtml(msg.content)}</div>
+            <div class="message-footer">
+                <button class="like-btn ${liked}" onclick="toggleLike(${msg.id}, this)">
+                    <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ${heartFill}>
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                    </svg>
+                    <span class="like-count">${msg.like_count || 0}</span>
+                </button>
+            </div>
         `;
         container.appendChild(card);
     });
@@ -122,16 +181,61 @@ function renderMessages(messages) {
  */
 function prependMessage(msg) {
     const container = document.getElementById('messages');
+    const emptyState = document.getElementById('emptyState');
+    emptyState.style.display = 'none';
+
     const card = document.createElement('div');
-    card.className = 'message-card';
+    card.className = 'message-card new';
+    card.dataset.id = msg.id;
+
     card.innerHTML = `
         <div class="message-header">
-            <span class="message-nickname ${getNicknameColorClass(msg.nickname)}">${escapeHtml(msg.nickname)}</span>
+            <span class="message-nickname">
+                <span class="nickname-badge ${getNicknameColorClass(msg.nickname)}">${escapeHtml(msg.nickname)}</span>
+            </span>
             <span class="message-time">刚刚</span>
         </div>
         <div class="message-content">${escapeHtml(msg.content)}</div>
+        <div class="message-footer">
+            <button class="like-btn" onclick="toggleLike(${msg.id}, this)">
+                <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+                <span class="like-count">0</span>
+            </button>
+        </div>
     `;
     container.insertBefore(card, container.firstChild);
+}
+
+/**
+ * 点赞/取消点赞
+ */
+async function toggleLike(messageId, btn) {
+    try {
+        const response = await fetch(`/api/msg/${messageId}/like`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            throw new Error('操作失败');
+        }
+
+        const data = await response.json();
+
+        // 更新UI
+        const countEl = btn.querySelector('.like-count');
+        countEl.textContent = data.like_count;
+
+        if (data.liked) {
+            btn.classList.add('liked');
+        } else {
+            btn.classList.remove('liked');
+        }
+    } catch (error) {
+        console.error('点赞失败:', error);
+        showToast('操作失败，请重试');
+    }
 }
 
 /**
@@ -139,16 +243,27 @@ function prependMessage(msg) {
  */
 function showNotFound() {
     document.querySelector('.header').style.display = 'none';
-    document.querySelector('.presence-indicator').style.display = 'none';
+    document.querySelector('.quick-actions').style.display = 'none';
     document.getElementById('messages').style.display = 'none';
     document.getElementById('inputBar').style.display = 'none';
+    document.getElementById('loading').style.display = 'none';
     document.getElementById('notFound').style.display = 'block';
+}
+
+/**
+ * 显示/隐藏加载状态
+ */
+function setLoading(loading) {
+    isLoading = loading;
+    document.getElementById('loading').style.display = loading ? 'block' : 'none';
 }
 
 /**
  * 加载地点数据
  */
 async function loadLocation() {
+    setLoading(true);
+
     try {
         const response = await fetch(`/api/loc/${locationId}`);
 
@@ -168,6 +283,7 @@ async function loadLocation() {
         // 更新头部信息
         document.getElementById('locationName').textContent = data.location.name;
         document.getElementById('locationDesc').textContent = data.location.description || '';
+        document.getElementById('locationEmoji').textContent = data.location.emoji || '📍';
 
         // 更新在场人数
         document.getElementById('presenceCount').textContent = data.presence_count;
@@ -186,7 +302,34 @@ async function loadLocation() {
 
     } catch (error) {
         console.error('加载地点数据失败:', error);
-        document.getElementById('locationName').textContent = '加载失败';
+        showToast('加载失败，请刷新重试');
+    } finally {
+        setLoading(false);
+    }
+}
+
+/**
+ * 刷新留言列表
+ */
+async function refreshMessages() {
+    if (isLoading) return;
+
+    try {
+        const response = await fetch(`/api/loc/${locationId}`);
+        if (!response.ok) return;
+
+        const data = await response.json();
+
+        // 更新在场人数
+        document.getElementById('presenceCount').textContent = data.presence_count;
+
+        // 渲染留言（保持滚动位置）
+        const scrollPos = window.scrollY;
+        renderMessages(data.messages);
+        window.scrollTo(0, scrollPos);
+
+    } catch (error) {
+        console.error('刷新失败:', error);
     }
 }
 
@@ -198,16 +341,21 @@ async function sendMessage() {
     const content = input.value.trim();
 
     if (!content) {
+        showToast('请输入留言内容');
         return;
     }
 
     // 清空输入框
     input.value = '';
+    updateCharCount();
 
     // 乐观更新：先显示留言
     const tempMsg = {
+        id: Date.now(),
         nickname: myNickname || '匿名用户',
-        content: content
+        content: content,
+        like_count: 0,
+        liked: false
     };
     prependMessage(tempMsg);
 
@@ -229,17 +377,29 @@ async function sendMessage() {
         // 更新我的昵称
         myNickname = msg.nickname;
 
-        // 更新刚插入的卡片的昵称（如果之前是临时的）
+        // 更新刚插入的卡片
         const firstCard = document.querySelector('.message-card');
         if (firstCard) {
-            const nicknameEl = firstCard.querySelector('.message-nickname');
+            firstCard.dataset.id = msg.id;
+            const nicknameEl = firstCard.querySelector('.nickname-badge');
             nicknameEl.textContent = msg.nickname;
-            nicknameEl.className = `message-nickname ${getNicknameColorClass(msg.nickname)}`;
+            nicknameEl.className = `nickname-badge ${getNicknameColorClass(msg.nickname)}`;
+
+            // 更新点赞按钮的onclick
+            const likeBtn = firstCard.querySelector('.like-btn');
+            likeBtn.setAttribute('onclick', `toggleLike(${msg.id}, this)`);
         }
+
+        showToast('留言成功');
 
     } catch (error) {
         console.error('发送留言失败:', error);
-        alert('发送失败，请重试');
+        showToast('发送失败，请重试');
+        // 移除乐观添加的卡片
+        const firstCard = document.querySelector('.message-card');
+        if (firstCard && firstCard.dataset.id == tempMsg.id) {
+            firstCard.remove();
+        }
     }
 }
 
@@ -267,27 +427,6 @@ function startHeartbeat() {
 }
 
 /**
- * 刷新留言列表
- */
-async function refreshMessages() {
-    try {
-        const response = await fetch(`/api/loc/${locationId}`);
-        if (!response.ok) return;
-
-        const data = await response.json();
-
-        // 更新在场人数
-        document.getElementById('presenceCount').textContent = data.presence_count;
-
-        // 渲染留言
-        renderMessages(data.messages);
-
-    } catch (error) {
-        console.error('刷新失败:', error);
-    }
-}
-
-/**
  * 启动刷新定时器
  */
 function startRefresh() {
@@ -295,6 +434,52 @@ function startRefresh() {
         clearInterval(refreshTimer);
     }
     refreshTimer = setInterval(refreshMessages, REFRESH_INTERVAL);
+}
+
+/**
+ * 更新字符计数
+ */
+function updateCharCount() {
+    const input = document.getElementById('messageInput');
+    const count = document.getElementById('charCount');
+    const len = input.value.length;
+
+    count.textContent = len;
+
+    const countContainer = count.parentElement;
+    countContainer.classList.remove('warning', 'error');
+
+    if (len > 250) {
+        countContainer.classList.add('error');
+    } else if (len > 200) {
+        countContainer.classList.add('warning');
+    }
+}
+
+/**
+ * 自动调整输入框高度
+ */
+function autoResize() {
+    const input = document.getElementById('messageInput');
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+}
+
+/**
+ * 创建背景粒子
+ */
+function createParticles() {
+    const container = document.getElementById('particles');
+    const particleCount = 20;
+
+    for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.animationDelay = Math.random() * 20 + 's';
+        particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+        container.appendChild(particle);
+    }
 }
 
 /**
@@ -312,15 +497,29 @@ function init() {
     // 确保 session_id 存在
     getOrCreateSessionId();
 
+    // 创建背景粒子
+    createParticles();
+
     // 加载数据
     loadLocation();
 
-    // 绑定回车发送
-    document.getElementById('messageInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
+    // 绑定输入事件
+    const input = document.getElementById('messageInput');
+
+    input.addEventListener('input', () => {
+        updateCharCount();
+        autoResize();
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
             sendMessage();
         }
     });
+
+    // 初始字符计数
+    updateCharCount();
 }
 
 // 页面加载完成后初始化
