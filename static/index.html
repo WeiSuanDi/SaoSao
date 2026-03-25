@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>weisuandi.com - 地点留言</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部区域 -->
+        <header class="header">
+            <h1 class="location-name" id="locationName">加载中...</h1>
+            <p class="location-desc" id="locationDesc"></p>
+        </header>
+
+        <!-- 在场指示器 -->
+        <div class="presence-indicator">
+            <span class="presence-dot"></span>
+            <span id="presenceCount">0</span> 人在此
+        </div>
+
+        <!-- 留言流 -->
+        <div class="messages" id="messages">
+            <!-- 留言卡片将在这里动态生成 -->
+        </div>
+
+        <!-- 404 提示页 -->
+        <div class="not-found" id="notFound" style="display: none;">
+            <div class="not-found-icon">📍</div>
+            <h2>这个地点还没有被开启</h2>
+            <p>也许你可以去找找看有没有二维码？</p>
+            <a href="/" class="back-home">返回首页</a>
+        </div>
+
+        <!-- 底部输入栏 -->
+        <div class="input-bar" id="inputBar">
+            <input
+                type="text"
+                id="messageInput"
+                placeholder="在这里留下你的话..."
+                maxlength="280"
+                autocomplete="off"
+            >
+            <button id="sendBtn" onclick="sendMessage()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

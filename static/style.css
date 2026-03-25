@@ -1,0 +1,239 @@
+/*
+ * weisuandi.com 样式表
+ * 暗色主题，克制、安静的设计
+ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background-color: #0a0a0a;
+    color: #e0e0e0;
+    min-height: 100vh;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 20px;
+    padding-bottom: 100px; /* 为底部输入栏留空间 */
+}
+
+/* 顶部区域 */
+.header {
+    text-align: center;
+    padding: 20px 0;
+    margin-bottom: 15px;
+}
+
+.location-name {
+    font-size: 1.8em;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.location-desc {
+    font-size: 0.9em;
+    color: #888;
+}
+
+/* 在场指示器 */
+.presence-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #1a1a1a;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    color: #aaa;
+    margin-bottom: 25px;
+}
+
+.presence-dot {
+    width: 8px;
+    height: 8px;
+    background: #4ade80;
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(0.8);
+    }
+}
+
+/* 留言流 */
+.messages {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.message-card {
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 16px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.message-nickname {
+    font-weight: 500;
+    font-size: 0.9em;
+}
+
+.message-time {
+    font-size: 0.75em;
+    color: #666;
+}
+
+.message-content {
+    font-size: 0.95em;
+    word-break: break-word;
+    color: #d0d0d0;
+}
+
+/* 404 页面 */
+.not-found {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.not-found-icon {
+    font-size: 4em;
+    margin-bottom: 20px;
+}
+
+.not-found h2 {
+    font-size: 1.3em;
+    margin-bottom: 10px;
+}
+
+.not-found p {
+    color: #888;
+    margin-bottom: 30px;
+}
+
+.back-home {
+    display: inline-block;
+    padding: 12px 24px;
+    background: #2a2a2a;
+    color: #e0e0e0;
+    text-decoration: none;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.back-home:hover {
+    background: #3a3a3a;
+}
+
+/* 底部输入栏 */
+.input-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #0f0f0f;
+    border-top: 1px solid #2a2a2a;
+    padding: 12px 20px;
+    display: flex;
+    gap: 10px;
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.input-bar input {
+    flex: 1;
+    background: #1a1a1a;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 1em;
+    color: #e0e0e0;
+    outline: none;
+    transition: background 0.2s;
+}
+
+.input-bar input:focus {
+    background: #222;
+}
+
+.input-bar input::placeholder {
+    color: #666;
+}
+
+.input-bar button {
+    background: #2a2a2a;
+    border: none;
+    border-radius: 8px;
+    padding: 0 16px;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.input-bar button:hover {
+    background: #3a3a3a;
+    color: #e0e0e0;
+}
+
+.input-bar button:active {
+    transform: scale(0.95);
+}
+
+/* 加载动画 */
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+
+/* 昵称颜色类 */
+.nick-1 { color: #f87171; }
+.nick-2 { color: #fb923c; }
+.nick-3 { color: #fbbf24; }
+.nick-4 { color: #a3e635; }
+.nick-5 { color: #4ade80; }
+.nick-6 { color: #2dd4bf; }
+.nick-7 { color: #22d3ee; }
+.nick-8 { color: #38bdf8; }
+.nick-9 { color: #60a5fa; }
+.nick-10 { color: #818cf8; }
+.nick-11 { color: #a78bfa; }
+.nick-12 { color: #c084fc; }
+.nick-13 { color: #e879f9; }
+.nick-14 { color: #f472b6; }
+.nick-15 { color: #fb7185; }
