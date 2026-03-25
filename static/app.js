@@ -434,6 +434,7 @@ function showMainContent() {
     document.getElementById('photoGate').style.display = 'none';
     document.getElementById('mainContent').style.display = 'block';
     document.getElementById('inputBar').style.display = 'flex';
+    document.getElementById('photoTimeline').style.display = 'block';
 }
 
 /**
