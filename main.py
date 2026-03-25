@@ -486,7 +486,6 @@ async def toggle_like(
 @app.post("/api/loc/{location_id}/photo")
 async def upload_photo(
     location_id: str,
-    request: Request,
     response: Response,
     photo: UploadFile = File(...),
     session_id: Optional[str] = Cookie(None)
@@ -495,9 +494,7 @@ async def upload_photo(
     上传照片
     用于拍照入场功能
     """
-    from fastapi import UploadFile, File
     import string
-    import io
 
     # 生成或复用 session_id
     sid = await get_or_create_session_id(session_id)
