@@ -545,16 +545,16 @@ async def upload_photo(
         if img.mode in ("P", "RGBA"):
             img = img.convert("RGB")
 
-        # 缩放图片（最大宽度 1200px）
-        max_width = 1200
+        # 缩放图片（最大宽度 800px，适合移动端）
+        max_width = 800
         if img.width > max_width:
             ratio = max_width / img.width
             new_height = int(img.height * ratio)
             img = img.resize((max_width, new_height), Image.LANCZOS)
 
-        # 转换为 JPEG 并压缩
+        # 转换为 JPEG 并压缩（质量50%，减小文件大小）
         output = io.BytesIO()
-        img.save(output, format="JPEG", quality=80, optimize=True)
+        img.save(output, format="JPEG", quality=50, optimize=True)
         compressed_contents = output.getvalue()
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"图片处理失败: {str(e)}")
