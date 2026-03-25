@@ -534,41 +534,43 @@ async def upload_photo(
         if not location:
             raise HTTPException(status_code=404, detail="地点不存在")
 
-        # 压缩图片
-        try:
-                img = Image.open(io.BytesIO(contents))
+    # 压缩图片（在数据库会话外执行）
+    try:
+        img = Image.open(io.BytesIO(contents))
 
-                # 转换为 RGB 模式（如果需要）
-                if img.mode in ("P", "RGBA"):
-                    img = img.convert("RGB")
+        # 转换为 RGB 模式（如果需要）
+        if img.mode in ("P", "RGBA"):
+            img = img.convert("RGB")
 
-                # 缩放图片（最大宽度 1200px）
-                max_width = 1200
-                if img.width > max_width:
-                    ratio = max_width / img.width
-                    new_height = int(img.height * ratio)
-                    img = img.resize((max_width, new_height), Image.LANCZOS)
+        # 缩放图片（最大宽度 1200px）
+        max_width = 1200
+        if img.width > max_width:
+            ratio = max_width / img.width
+            new_height = int(img.height * ratio)
+            img = img.resize((max_width, new_height), Image.LANCZOS)
 
-                # 转换为 JPEG 并压缩
-                output = io.BytesIO()
-                img.save(output, format="JPEG", quality=80, optimize=True)
-                compressed_contents = output.getvalue()
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"图片处理失败: {str(e)}")
+        # 转换为 JPEG 并压缩
+        output = io.BytesIO()
+        img.save(output, format="JPEG", quality=80, optimize=True)
+        compressed_contents = output.getvalue()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"图片处理失败: {str(e)}")
 
-        # 生成文件名
-        timestamp = int(datetime.utcnow().timestamp())
-        random_str = ''.join(random.choices(string.ascii_lowercase + string.digits) for _ in range(6))
-        filename = f"{location_id}_{timestamp}_{random_str}.jpg"
+    # 生成文件名
+    timestamp = int(datetime.utcnow().timestamp())
+    random_str = ''.join(random.choices(string.ascii_lowercase + string.digits) for _ in range(6))
+    filename = f"{location_id}_{timestamp}_{random_str}.jpg"
 
-        filepath = os.path.join(os.path.dirname(__file__), "uploads", filename)
+    filepath = os.path.join(os.path.dirname(__file__), "uploads", filename)
 
-        # 保存文件
-        with open(filepath, "wb") as f:
-            f.write(compressed_contents)
+    # 保存文件
+    with open(filepath, "wb") as f:
+        f.write(compressed_contents)
 
-        # 保存到数据库
-        image_url = f"/uploads/{filename}"
+    # 保存到数据库
+    image_url = f"/uploads/{filename}"
+
+    async with AsyncSessionLocal() as db:
         new_photo = Photo(
             location_id=location_id,
             session_id=sid,
@@ -579,10 +581,10 @@ async def upload_photo(
         await db.commit()
         await db.refresh(new_photo)
 
-        return {
-            "ok": True,
-            "photo": new_photo.to_dict()
-        }
+    return {
+        "ok": True,
+        "photo": new_photo.to_dict()
+    }
 
 
 @app.get("/api/stats")
