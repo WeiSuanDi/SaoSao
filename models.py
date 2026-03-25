@@ -50,20 +50,16 @@ class Message(Base):
     location = relationship("Location", back_populates="messages")
     likes = relationship("Like", back_populates="message", cascade="all, delete-orphan")
 
-    def to_dict(self, session_id=None):
+    def to_dict(self, session_id=None, check_likes=True):
         """转换为字典"""
         result = {
             "id": self.id,
             "content": self.content,
             "nickname": self.nickname,
-            "like_count": self.like_count,
-            "created_at": self.created_at.isoformat() if self.created_at else None
+            "like_count": self.like_count or 0,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "liked": False
         }
-        # 检查当前用户是否已点赞
-        if session_id and self.likes:
-            result["liked"] = any(like.session_id == session_id for like in self.likes)
-        else:
-            result["liked"] = False
         return result
 
 
