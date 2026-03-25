@@ -545,10 +545,10 @@ function renderPhotos(photos) {
         const div = document.createElement('div');
         div.className = 'timeline-photo';
         div.innerHTML = `
-            <img src="${photo.image_url}" alt="地点照片" loading="lazy">
+            <img src="data:image/jpeg;base64,${photo.image_data}" alt="地点照片" loading="lazy">
             <div class="timeline-photo-time">${formatRelativeTime(photo.created_at)}</div>
         `;
-        div.onclick = () => openLightbox(photo.image_url);
+        div.onclick = () => openLightbox(`data:image/jpeg;base64,${photo.image_data}`);
         container.appendChild(div);
     });
 }
