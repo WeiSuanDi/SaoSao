@@ -111,20 +111,25 @@ async def lifespan(app: FastAPI):
         # 创建所有表
         await conn.run_sync(Base.metadata.create_all)
 
-        # 数据库迁移：添加缺失的列（兼容旧数据库）
+        # 数据库迁移：添加缺失的列和表（兼容旧数据库）
         try:
-            # 检查并添加 like_count 列到 messages 表
+            # 添加 like_count 列到 messages 表
+            await conn.execute(text(
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS like_count INTEGER DEFAULT 0"
+            ))
+            # 创建 likes 表（如果不存在）
             await conn.execute(text("""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
-                                   WHERE table_name='messages' AND column_name='like_count') THEN
-                        ALTER TABLE messages ADD COLUMN like_count INTEGER DEFAULT 0;
-                    END IF;
-                END $$;
+                CREATE TABLE IF NOT EXISTS likes (
+                    id SERIAL PRIMARY KEY,
+                    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                    session_id VARCHAR(64) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(message_id, session_id)
+                )
             """))
+            print("✅ Database migration completed")
         except Exception as e:
-            print(f"Migration warning: {e}")
+            print(f"Migration info: {e}")
 
     # 初始化种子数据
     await init_seed_data()
