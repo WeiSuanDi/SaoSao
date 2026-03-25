@@ -560,9 +560,24 @@ async def upload_photo(
 
     filepath = os.path.join(os.path.dirname(__file__), "uploads", filename)
 
-    # 保存文件
-    with open(filepath, "wb") as f:
-        f.write(compressed_contents)
+    # 保存文件到数据库
+    image_url = f"/uploads/{filename}"
+
+    async with AsyncSessionLocal() as db:
+        new_photo = Photo(
+            location_id=location_id,
+            session_id=sid,
+            image_url=image_url,
+            created_at=datetime.utcnow()
+        )
+        db.add(new_photo)
+        await db.commit()
+        await db.refresh(new_photo)
+
+    return {
+        "ok": True,
+        "photo": new_photo.to_dict()
+    }
 
     # 保存到数据库
     image_url = f"/uploads/{filename}"

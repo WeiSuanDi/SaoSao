@@ -103,7 +103,7 @@ class Photo(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)  # 自增主键
     location_id = Column(String(50), ForeignKey("locations.id"), nullable=False)  # 关联地点
     session_id = Column(String(64), nullable=False)  # 上传者 session 标识
-    image_url = Column(String(500), nullable=False)  # 图片访问URL
+    image_data = Column(Text, nullable=False)  # Base64 编码图片数据
     created_at = Column(DateTime, default=datetime.utcnow)  # 上传时间
 
     # 关联关系
@@ -113,7 +113,7 @@ class Photo(Base):
         """转换为字典"""
         return {
             "id": self.id,
-            "image_url": self.image_url,
+            "image_data": self.image_data,  # 返回 base64 数据
             "created_at": self.created_at.isoformat() + 'Z' if self.created_at else None
         }
 
